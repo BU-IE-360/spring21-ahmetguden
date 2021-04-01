@@ -1,4 +1,4 @@
 # Progress Journal
 ## Homework 0
-[Here](files/homework0.html) is the Homework 0 file. 
+[Here](files/hw_0.html) is the Homework 0 file. 
 

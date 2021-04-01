@@ -1,0 +1,40 @@
+---
+title: "Interesting Forecasting Applications with R"
+author: "Efe Ahmet Guden"
+date: "4/1/2021"
+output: html_document
+---
+```{r,echo=FALSE,results="hide"}
+library(knitr)
+opts_chunk$set(tidy.opts=list(width.cutoff=60),tidy=TRUE)
+```
+
+1. [Time series forecasting using ARIMA models](https://blogs.oracle.com/datascience/introduction-to-forecasting-with-arima-in-r)
+
+    This example is important because it introduces the forecasting methodology using ARIMA models in R. The     steps are:
+    1) Examine your data
+    2) Decompose your data
+    3) Stationarity
+    4) Autocorrelations and choosing model order
+    5) Fit an ARIMA model
+    6) Evaluate and iterate
+    
+2. [Weather Forecasting](https://en.wikipedia.org/wiki/Weather_forecasting)
+
+    Meteorologists use past weather and climate data to predict the weather of a region at a given time.
+    Weather forecasts are based on many factors such as temperature, air pressure, precipitation.
+
+3. [Population Forecasting](https://en.wikipedia.org/wiki/Demographic_analysis)
+   
+    Population forecasting are used by governments. It can be useful to forecast the population of a country in order to predict its future economic situation.
+    
+4. [Price Forecasting](https://www.altexsoft.com/blog/business/price-forecasting-machine-learning-based-approaches-applied-to-electricity-flights-hotels-real-estate-and-stock-pricing/)
+   
+    Price of a good or service can be predicted with forecasting methods. This way, one can purchase a good or service when its price is relatively lower.
+    
+
+5. [Energy forecasting](https://en.wikipedia.org/wiki/Energy_forecasting)
+ 
+    Energy forecasting includes forecasting demand and price of electricity, fossil fuels (natural gas, oil, coal) and renewable energy sources (RES; hydro, wind, solar). 
+    
+    
