@@ -1,0 +1,287 @@
+---
+title: "Time Series Regression Analysis on Mortgaged House Sales"
+author: "Efe Ahmet Guden"
+date: "5/6/2021"
+output: html_document
+---
+
+```{r setup,echo=FALSE,warning=FALSE,message=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+
+library(zoo)
+library(tidyverse)
+library(lubridate)
+library(readxl)
+library(data.table)
+library(fpp)
+library(GGally)
+
+```
+
+# 1) Introduction 
+
+In this paper, we are going to predict the number of mortgaged house sales in 2021 April, in Turkey. In order to do so, we are going to create a time series regression model with predictors. The scope of the analysis is from 2013 January to 2021 March. The data are collected on a monthly basis.
+Three predictors are used in this analysis: interest rates on bank loans for housing, construction of new residential buildings, the response to the survey question which asks the probability of buying or building a new house over the next 12 months.
+Interest rates on bank loans directly affect the mortgaged house sales since people purchase the house with a loan with the mortgage system. The price of the house is lower with low interest rates. The probability of buying or building a new house reflects the Turkish citizens future plans on buying a house, therefore it can be used as a predictor in this analysis. Lastly the number of newly constructed houses can give an idea about the number of mortgaged house sales. 
+The time-series data are imported from [EVDS](https://evds2.tcmb.gov.tr/). EVDS is the official data delivery webiste of Central Bank of the Republic of Turkey. 
+
+# 2) Data Import and Manipulation
+
+The data is manually imported by using MS Excel.
+```{r,echo=F,message=F, warning=FALSE,include=FALSE}
+getwd()
+setwd("/Users/ahmetguden/Desktop/GitHub/spring21-ahmetguden/data")
+df <- as.data.table(read_excel("evds.csv"))
+days <- (rep(15,99))
+df$Date <- paste(df$Date,days,sep = "-")
+df$Date <- as.Date(df$Date,format = "%Y-%m-%d")
+```
+After necessary manipulations the data looks like this:
+```{r}
+head(df)
+```
+
+# 3) Time Series Regression 
+
+In this section, we are going to create a time series regression model. There are numerous assumptions in regression modelling: dependent variable should be normally distributed, residuals should be independent and they should be normally distributed with zero mean and constant variance, predictors should be deterministic and uncorrelated. We are going to check whether these assumptions hold for this model as we proceed.
+
+## 3.1) Data Visualization
+
+This plot shows the dependent variable, which is the number of mortgaged house sales, over time.
+
+```{r,echo=F}
+ggplot(df,aes(Date)) +
+  geom_line(aes(y=MortgagedSales)) +
+  scale_x_date(date_breaks = "10 months", limits = as.Date(c("2013-01-15", "2021-03-15"))) +
+  scale_y_continuous(breaks = seq(10000,130000,length.out = 7)) +
+  theme(axis.text.x = element_text(angle = 60)) +
+  labs(title="Mortgaged House Sales over Time" , x= "Date" , y= "Number of Sales") 
+```
+
+The number of sales are around 35000  with relatively low variance, until 2018 June . Then there is a sharp decrease followed by an increase in 2019 August. Then the number of sales decreases once again in 2020 April. In 2020 June, the number of mortgagegd house sales jumped dramatically to 100000. However, the jump is followed by a fall by the same amount. After 2018 June, variance of the dependent variable has increased greatly. Altough we are going to assume that the data has constant variance over time. It is hard to figure out if there is a trend at the first glance. Also the data does not seem to be seasonal. However, we will analyze the effects of trend and seasonality in the analysis.
+
+
+This is the histogram of the dependent variable, which is the number of mortgaged house sales.
+This will help us to check whether the dependent variable is normally distributed.
+
+```{r,echo=F,warning=F,message=F}
+ggplot(df,aes(MortgagedSales)) +
+  geom_histogram() +
+  scale_x_continuous(n.breaks = 10) +
+  labs(title = "Histogram of number of mortgaged house sales" , x= "Number of Sales", y= "Count")+
+  ylim(0,20)
+```
+
+The number of mortgaged house sales will be assumed to be normally distributed. However, there are some observations which are far from the mean.
+
+Now, the relationship between all of the variables are going to be analyzed with the ggpairs function. This function will provide the correlation between the variables as well as their histograms.
+
+```{r,echo=F}
+ggpairs(df[,.(MortgagedSales,InterestRate,Probability,Construction)])
+```
+
+At first glance, the high correlation between the interest rates on bank loans for housing and the number of sales is observed. The other predictors, probability of buying a new house over the next 12 months and the number of newly constructed residential buildings, are almost non correlated with the number of sales ; which is surprising. These insights will be used while creating the time series regression model.
+
+## 3.2) Models
+
+### 3.2.1) Model 1
+
+In our first model, all of the possible predictors will be used. Altough, the probability of buying or building a new house over the next 12 months and the number of newly constructed residential buildings are  almost not correlated with the number of sales. Therefore, the significance of the variables (the p-values of the t-test) will be analyzed. 
+
+```{r,echo=F}
+fit1 <- lm(MortgagedSales ~ InterestRate + Probability + Construction ,data=df)
+
+```
+```{r}
+summary(fit1)
+```
+
+The p-value of the F-test is very small, therefore we can state that the model is significant. The p-values of the t-tests are low for two predictors: the probability of buying or building a new house over the next 12 months and the interest rates on bank loans for housing. This means that these predictors are significant in our model. The adjusted R-squared value is 0.45, which means that more than half of the variance in the data can not be explained with this model. 
+From now on, the construction of new residential buildings will not be used in our model, because the p-value of the t-test of this prediction implies that it is insignificant.
+
+```{r}
+checkresiduals(fit1)
+```
+
+As the variance in the dependent variable increases after 2018 June, the variance of the residuals also increase. Also there is high autocorrelation at lag 1, and the p-value of Breusch-Godfrey test is significantly small, therefore the residuals are autocorrelated.
+Looking at the histogram, we can assume that the residuals are normally distributed.
+
+### 3.2.2) Model 2
+
+In the second model, the trend is included in the model. The data does not seem to be following a trend, however the effect of the trend component is going to be observed after including it in the model.
+
+```{r,echo=F}
+df[,Trend:=1:.N]
+fit2 <- lm(MortgagedSales ~ InterestRate + Probability + Trend,data=df)
+```
+
+```{r}
+summary(fit2)
+```
+
+The p-value of the t-test related to the trend component is low, thus the trend component is significant in this model.Also notice the slight increase in the adjusted R-squared value.
+From now on the trend component is going to be included in the model.
+
+
+### 3.2.3) Model 3
+
+In the third model, the seasonality is included in the model. The data does not seem to be seasonal, however the effect of the seasonality is going to be observed after including it in the model.
+
+```{r,echo=F,warning=F}
+Month <- 1:12
+df <- cbind(df,Month)
+Quarter <- c(1,1,1,2,2,2,3,3,3,4,4,4)
+df <- cbind(df,Quarter)
+fit3 <- lm(MortgagedSales ~ InterestRate + Probability + Trend + as.factor(Month), data=df)
+fit4 <- lm(MortgagedSales ~ InterestRate + Probability + Trend + as.factor(Quarter), data=df)
+```
+
+```{r}
+summary(fit3)
+```
+
+The months are added as factor variables, in order to analyze the effect of the months on the dependent variable. However, the effects of the months are insignificant in this model because the p-values of the t-tests are high. Therefore, the months will not be in the regression model.
+
+There is no effect of months ; but the seasons, or quarters may also affect the dependent variable. 
+
+```{r}
+summary(fit4)
+```
+
+The quarters are added as factor variables. The effects of the quarters are insignificant in this model because the p-values of the t-tests are high. Therefore, the quarters will not be in the regression model.
+
+To conclude, there is no seasonality effect in the dependent variable.
+
+### 3.2.4) Model 4
+
+
+In the fourth model, two dummy variables are included in the model: Interest_Up and Interest_Down. Interest_Up takes the value 1 when the government applies a policy which increases the interest rates significantly. Interest_Down takes the value 1 when the governemnt appl,es a policy which reduces the interest rates significantly. Interest_Down may be thought as an incentive for mortgaged house sales.
+
+```{r,echo=F}
+
+df[Date %between% c("2018-09-15" , "2019-02-15"), Interest_Up:=1]
+df[is.na(Interest_Up)==T, Interest_Up:=0]
+fit5 <- lm(MortgagedSales ~ InterestRate + Trend + Probability + as.factor(Interest_Up), data = df )
+
+
+df[Date %between% c("2020-06-15" , "2020-07-15"), Interest_Down:=1]
+df[is.na(Interest_Down)==T, Interest_Down:=0]
+fit6 <- lm(MortgagedSales ~ InterestRate + Trend + Probability + as.factor(Interest_Up) + as.factor(Interest_Down), data = df )
+
+```
+```{r}
+summary(fit6)
+```
+
+Notice that the p-values of the dummy variables are low, therefore we can state that these variables are significant in our model. The adjusted R-squared has also increased to 0.8. These dummy variables will be included in the model. These dummy variables can be used in forecasting, according to the interest rate policy of the government.
+As we have covered the trend effect, seasonality and possible predictors, this model will be the final model.
+
+## 3.3) Analysis of the Final Model
+
+The overall performance and the residuals are going to be analyzed in this section.
+Firstly, the residuals are going to be observed.
+```{r}
+checkresiduals(fit6)
+```
+
+The residuals seem to be normally distributed, thus our assumption holds true. The mean seems to be zero, altough the variance is not constant. The variance of the residuals increase at some point. However, we are not going to be interested in this and continue by assuming that the variance is constant. The residuals are autocorrelated at lag 1. Thus the p-value of the Bresuch-Godfrey test is significantly small. Therefore, one can state that the residuals are autocorrelated. The autocorrelation may be the reason of the increasing variance in residual. The serial correlation will not be discussed in this analysis, since it is out of the scope.
+```{r,echo=F}
+df[,Fitted:=fitted(fit6)]
+df[,Residuals:=residuals(fit6)]
+```
+
+
+The following plot shows the fitted and actual number of sales over time.
+
+```{r,echo=F,warning=F}
+
+ggplot(df,aes(Date)) +
+  geom_line(aes(y=Fitted , color='Fitted')) +
+  geom_line(aes(y=MortgagedSales, color='MortgagedSales')) +
+  labs(title="Fitted and Actual Number of Mortgaged House Sales" ,x="Date" , y= "Number of Sales") +
+  scale_x_date(date_breaks = "10 months", limits = as.Date(c("2013-01-15", "2021-03-15"))) +
+  scale_y_continuous(breaks = seq(10000,130000,length.out = 7)) +
+  theme(axis.text.x = element_text(angle = 60)) 
+```
+
+The model seems to fit the actual data. 
+
+The following plot shows the fitted values vs actual values.
+
+```{r, echo = F, warning=F}
+ggplot(df,aes(x=Fitted, y=MortgagedSales)) +
+  geom_point() +
+  geom_abline(slope = 1,intercept = 0,color="blue") +
+  xlim(0,60000)+
+  ylim(0,60000)
+```
+
+The fitted and actual data seems to fit, they are following the x=y line.
+
+
+The following plot shows the fitted values vs residuals.
+
+```{r,echo = F, warning=F, message=F}
+ggplot(df,aes(x=Fitted, y=Residuals)) +
+  geom_point() +
+  geom_smooth() +
+  scale_y_continuous(breaks = seq(-30000,30000,length.out = 5)) +
+  labs(title="Fitted vs Residuals" , x= "Fitted" , y= "Residuals")  +
+  xlim(0,50000)
+```
+
+Residuals vs fitted seem to be around 0. The assumptions state that the fitted vs residuals should be random, in our case we can assume that they are randomly distributed.
+
+
+The analysis of the final model ends here.
+
+## 3.4) Forecast
+
+Now that the time series regression model is created, we can forecast the number of mortgaged house sales in 2021 April. 
+
+
+```{r,echo=F}
+df <-  rbind(df, data.table(Date=as.Date("2021-04-15" , format = "%Y-%m-%d")), fill=T)  
+df[,Trend:=1:.N]
+df[Date=="2021-04-15", Month:=4]
+df[Date=="2021-04-15",Quarter:=2]
+```
+
+The predictors are not available for 2021 April, so we are going to assign reasonable values for the interest rates on bank loans for housing, the response to the survey question which asks the probability of buying or building a new house over the next 12 months and the dummy variables.
+Values for 2021 April of the following predictors, the interest rates and the probability of buying or building a new house over the next 12 months, are calculated by taking the average of the 2021 January, 2021 February and 2021 March values of themselves, respectively.
+
+```{r,echo=F}
+April_Prob <- df[Date>="2021-01-15" , mean(Probability, na.rm=T)]
+df[Date=="2021-04-15", Probability:=April_Prob]
+
+April_Interest <- df[Date>="2021-01-15" , mean(InterestRate, na.rm = T)]
+df[Date=="2021-04-15", InterestRate:=April_Interest]
+```
+
+The government has not announced a policy regarding the interest rates, therefore we will assign the value 0 to the dummy variables which represent government policies.
+
+```{r,echo=F}
+df[Date=="2021-04-15", Interest_Up:=0]
+df[Date=="2021-04-15", Interest_Down:=0]
+
+```
+
+Now, the number of mortgaged house sales in 2021 April will be forecasted.
+
+```{r,echo=F}
+df[is.na(Fitted)==T, Fitted:=predict(fit6, df[is.na(Fitted)==T])]
+```
+
+```{r,echo=F}
+paste(round(df[Date=="2021-04-15" , Fitted]))
+```
+
+
+
+# 4) Conclusion
+
+In this paper, we created a time series regression model in order to predict the number of mortgaged house sales in 2021 April. The model has some flaws: the variance of the residuals is not constant and there is autocorrelation between residuals. Overall, the model is successful in explaining the deviations in the data. Also with the adjusted R-squared of the model is 0.8. 
+The predicted number of mortgaged house sales is 19810. The error rate can be calculated when the actual realization is published on EVDS.
+
+
+

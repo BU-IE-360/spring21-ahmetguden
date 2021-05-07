@@ -5,3 +5,7 @@
 
 ## Homework 1
 [Here](files/homework_1.html) is three data visualization examples.
+
+
+## Homework 2 
+[Here](files/homework2.html) is the time series regression analysis on mortgaged house sales
