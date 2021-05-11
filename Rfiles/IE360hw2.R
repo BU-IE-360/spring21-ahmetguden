@@ -1,0 +1,142 @@
+library(zoo)
+library(tidyverse)
+library(lubridate)
+library(readxl)
+library(data.table)
+library(fpp)
+library(GGally)
+
+getwd()
+setwd("/Users/ahmetguden/Desktop/GitHub/spring21-ahmetguden/data")
+
+df <- as.data.table(read_excel("evds.csv"))
+str(df)
+
+days <- (rep(15,99))
+df$Date <- paste(df$Date,days,sep = "-")
+df$Date <- as.Date(df$Date,format = "%Y-%m-%d")
+
+
+ggplot(df,aes(Date)) +
+  geom_line(aes(y=MortgagedSales)) +
+  scale_x_date(date_breaks = "10 months", limits = as.Date(c("2013-01-15", "2021-03-15"))) +
+  scale_y_continuous(breaks = seq(10000,130000,length.out = 7)) +
+  theme(axis.text.x = element_text(angle = 60)) +
+  labs(title="Mortgaged House Sales over Time" , x= "Date" , y= "Number of Sales") 
+
+ggpairs(df[,.(MortgagedSales,InterestRate,Probability,Construction)])
+
+ggplot(df,aes(MortgagedSales)) +
+  geom_histogram() +
+  scale_x_continuous(n.breaks = 10) +
+  labs(title = "Histogram of number of mortgaged house sales" , x= "Number of Sales", y= "Count")+
+  ylim(0,20)
+  
+
+df[,Trend:=1:.N]
+head(df)
+
+
+ggplot(df,aes(Date)) +
+     geom_line(aes(y=MortgagedSales,color='MortgagedSales')) +
+    geom_line(aes(y=InterestRate*5000,color='InterestRate')) +
+  scale_x_date(date_breaks = "10 months", limits = as.Date(c("2013-01-15", "2021-03-15"))) +
+  theme(axis.text.x = element_text(angle = 60))
+
+
+
+fit1 <- lm(MortgagedSales ~ InterestRate+Probability+Construction,data=df)
+summary(fit1)
+checkresiduals(fit1)
+
+
+fit2 <- lm(MortgagedSales ~ InterestRate + Probability + Trend,data=df)
+
+
+Month <- 1:12
+df <- cbind(df,Month)
+head(df)
+
+fit3 <- lm(MortgagedSales ~ InterestRate + Trend + Probability + as.factor(Month), data=df )
+summary(fit3)
+
+Quarter <- c(1,1,1,2,2,2,3,3,3,4,4,4)
+df <- cbind(df,Quarter)
+
+fit4 <- lm(MortgagedSales ~ InterestRate + Probability+ as.factor(Quarter), data = df )
+summary(fit4)
+
+
+
+
+df[Date %between% c("2018-09-15" , "2019-02-15"), Interest_Up:=1]
+df[is.na(Interest_Up)==T, Interest_Up:=0]
+fit5 <- lm(MortgagedSales ~ InterestRate + Trend + Probability + as.factor(Interest_Up), data = df )
+
+
+df[Date %between% c("2020-06-15" , "2020-07-15"), Interest_Down:=1]
+df[is.na(Interest_Down)==T, Interest_Down:=0]
+fit6 <- lm(MortgagedSales ~ InterestRate + Trend + Probability + as.factor(Interest_Up) + as.factor(Interest_Down), data = df )
+
+
+
+summary(fit6)
+checkresiduals(fit6)
+
+
+fitted(fit6)
+df[,Fitted:=fitted(fit6)]
+df[,Residuals:=residuals(fit6)]
+
+
+
+
+ggplot(df,aes(x=Fitted, y=Residuals)) +
+  geom_point() +
+  geom_smooth() +
+  scale_y_continuous(breaks = seq(-30000,30000,length.out = 5)) +
+  labs(title="Fitted vs Residuals" , x= "Fitted" , y= "Residuals")  +
+  xlim(0,50000)
+
+
+
+
+
+ggplot(df,aes(x=Fitted, y=MortgagedSales)) +
+  geom_point() +
+  geom_abline(slope = 1,intercept = 0,color="blue") +
+  xlim(0,60000)+
+  ylim(0,60000)
+
+  
+
+
+ggplot(df,aes(Date)) +
+  geom_line(aes(y=Fitted , color='Fitted')) +
+  geom_line(aes(y=MortgagedSales, color='MortgagedSales')) +
+  labs(title="Fitted and Actual Number of Mortgaged House Sales" ,x="Date" , y= "Number of Sales") +
+  scale_x_date(date_breaks = "10 months", limits = as.Date(c("2013-01-15", "2021-03-15"))) +
+  scale_y_continuous(breaks = seq(10000,130000,length.out = 7)) +
+  theme(axis.text.x = element_text(angle = 60)) 
+
+df <-  rbind(df, data.table(Date=as.Date("2021-04-15" , format = "%Y-%m-%d")), fill=T)  
+
+df[,Trend:=1:.N]
+df[Date=="2021-04-15", Month:=4]
+df[Date=="2021-04-15",Quarter:=2]
+
+April_Prob <- df[Date>="2021-01-15" , mean(Probability, na.rm=T)]
+df[Date=="2021-04-15", Probability:=April_Prob]
+
+April_Interest <- df[Date>="2021-01-15" , mean(InterestRate, na.rm = T)]
+df[Date=="2021-04-15", InterestRate:=April_Interest]
+
+df[Date=="2021-04-15", Interest_Up:=0]
+df[Date=="2021-04-15", Interest_Down:=0]
+
+
+predict(fit6, df[is.na(Fitted)==T])
+df[is.na(Fitted)==T, Fitted:=predict(fit6, df[is.na(Fitted)==T])]
+prediction <- round(df[Date=="2021-04-15" , Fitted])
+prediction
+df[Date=="2021-02-15" , Residuals]
