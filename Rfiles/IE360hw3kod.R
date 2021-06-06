@@ -2,7 +2,7 @@ library(tidyverse)
 library(data.table)
 library(lubridate)
 library(forecast)
-library(ggplot)
+library(ggplot2)
 library(zoo)
 library(urca)
 
@@ -125,19 +125,15 @@ arma1 <-arima(df[,Random], order = c(5,0,5))
 AIC(arma1)
 
 
-arma303 <- arima(df[,Random], order = c(3,0,3))
-AIC(arma303)
 
 
-arma3 <- arima(df[,Random], order = c(4,0,2))
-AIC(arma3)
+
+
 
 arma2 <- arima(df[,Random], order = c(4,0,4))
 AIC(arma2)
 
 
-arma5 <- arima(df[,Random], order = c(3,0,4))
-AIC(arma5)
 
 
 summary(arma2)
@@ -196,4 +192,13 @@ accu=function(actual,forecast) {
   l=data.frame(n,mean,sd,CV,bias,MAPE,WMAPE)
   return(l) }
 
-dfdf[,accu(actuals, forecasts)]
+accu <- accu(actual,forecasted)
+accu
+
+dfdf <- as.data.table(dfdf)
+dfdf <- dfdf[,error:=actuals-forecasts]
+dfdf <- dfdf[,APE:= abs(error/actuals)]
+dfdf <- dfdf[,bias:= (error/actuals)]
+
+metrics <- dfdf[ , .(DailyMAPE = sum(APE) /24 , DailyBias = sum(bias) /24) , by=.(Date=as.Date(DateTime))] 
+metrics
