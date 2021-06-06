@@ -1,0 +1,435 @@
+---
+title: "Time Series Analysis with ARMA Models"
+author: "Efe Ahmet Guden"
+date: "6/6/2021"
+output: html_document
+---
+
+```{r setup, include = FALSE, echo = FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(ggplot2)
+library(data.table)
+library(zoo)
+library(urca)
+library(forecast)
+library(tidyverse)
+library(lubridate)
+```
+
+# Introduction 
+
+In this research, we are going to work with an hourly electricity consumption data in order to fit a model with which the consumption of the next two weeks will be forecasted.
+
+# Importing and Manipulating the Data
+
+The hourly electricity consumption data is imported from [Transparency Platform by EPİAŞ](seffaflik.epias.com.tr/transparency/) The consumption data from 1st of January, 2016 till the 20th of May, 2021 is used in this analysis.
+
+The data is downladed as a csv file and imported to R with read_csv() function. 
+
+
+```{r,echo=FALSE,warning=FALSE,message=FALSE,include=FALSE}
+setwd("/Users/ahmetguden/Desktop/GitHub/spring21-ahmetguden/data")
+df <- as.data.table(read_csv("epias2.csv"))
+
+df$Date <- as.Date(df$Date, format = "%d.%m.%Y")
+
+df$DateTime <- paste(df$Date,df$Time)
+df$DateTime <- as.POSIXct(df$DateTime,format="%Y-%m-%d %H:%M" ,tz="UTC")
+df <- df[,4:3]
+df$Consumption <- df$Consumption*1000
+```
+
+After certain manipulations, the data looks like this.
+
+```{r,message=FALSE}
+head(df)
+```
+
+Also, the consumption is 0 at 2016-03-27, 02:00:00. This is obviously an error which occured while entering or importing the data. In order to improve the analysis, this 0 value is replaced by the consumption of 2016-03-26, 02:00:00
+
+```{r,echo=FALSE,message=FALSE, include=FALSE}
+df[DateTime=="2016-03-26 02:00:00" , Consumption ]
+df[DateTime=="2016-03-27 02:00:00" , Consumption ]
+df[2067,2] <- 28413.3
+
+```
+
+
+# Time Series Analysis
+
+## Stationarity and Seasonality 
+
+First, let's visualize the data.
+
+```{r, echo=FALSE}
+ggplot(df, aes(x=DateTime , y=Consumption)) +
+  geom_line() +
+  labs(title = "Electricity Consumption", x="Date" )
+
+```
+
+There seems to be a seasonal effect: the consumption increases in summers and winters, and it decreases in falls and springs. Notice that the increase in the electricity consumption is higher in summers as compared to the increase in winters. There is also a slightly increasing trend. Several low consumption days are observed: these are religious and national holidays. Lastly, a decrease in 2020 spring is observed. This is due to the Covid-19 pandemic. 
+
+The data is not stationary due to several reasons discussed above. We can also check whether the data is stationary by a KPSS test.
+
+```{r}
+summary(ur.kpss(df$Consumption))
+```
+H0 in KPSS test states that the data is stationary. The value of test statistic is higher than all the critical values. The outcome declares that there is strong evidence to reject the idea of the consumption data being stationary.
+
+
+## Decomposition 
+
+We will try to decompose the time series in order to make it as stationary as possible. The time series object will be decomposed at different levels ( hourly, daily and monthly )
+
+Three plots will be analyzed: trend cycle component, seasonal component and the remaining random component. Trend cycle component explains the trend by moving average. The seasonal component is obtained when the trend cycle component is removed from the time series object. Finally, the random component is obtained when the time series object is deseasonalized and etrended. We expect this random component to be stationary. 
+
+### Decomposition at Hourly Level
+
+There is no increasing variance in the data, therefore the decomposition type will be additive.
+
+
+```{r,echo=FALSE}
+hourly_ts <- ts(df$Consumption,frequency = 24)
+hourly_dec <- decompose(hourly_ts,type ="additive")
+df[,hourly:=as.numeric(hourly_dec$seasonal)]
+
+```
+
+The hourly decomposition plots are below. 
+
+```{r}
+plot(hourly_dec)
+
+```
+
+The hourly seasoanlity effect is below.
+
+```{r,echo=FALSE}
+ggplot(df[1:24*2], aes(x=DateTime, y=hourly)) +
+  geom_line() +
+  geom_point() +
+  labs(title="Hourly Seasonality" , x="Date", y="Hourly Effect" )
+```
+
+With this plot, we can observe that the electricity consumption increases from 6 am until 12 am. Then it stays constant until midnight. Then it decreaes until 6 am. 
+
+
+The random component of the hourly decomposed data is below.
+
+```{r}
+plot(hourly_dec$random)
+```
+
+### Decomposition at Daily Level
+
+To analyze whether the time series follow a pattern in every 7 days or not, the time series object will be decomposed at daily level, therefore its frequency will be 24*7, which equals to 168.
+
+```{r,echo=F}
+daily_ts <- ts(df$Consumption,frequency = 24*7)
+daily_dec <- decompose(daily_ts,type ="additive")
+df[,daily:=as.numeric(daily_dec$seasonal)]
+
+```
+
+The daily decomposition plots are below. 
+
+
+```{r}
+plot(daily_dec)
+```
+
+The daily seasoanlity effect is below.
+
+```{r,echo=F}
+ggplot(df[1:168*2], aes(x=DateTime, y=daily)) +
+  geom_line() +
+  geom_point() +
+  labs(title="Daily Seasonality" , x="Date", y="Daily Effect" )
+```
+
+With this plot, we can observe that the consumption is lower at weekends. In addition, Sundays have the least consumption. The reason behind this is simple: most factories are closed on Sundays.
+
+
+The random component of the daily decomposed data is below.
+
+```{r}
+plot(daily_dec$random)
+```
+
+### Decomposition at Monthly Level
+
+
+To analyze whether the time series follow a pattern in every 12 months or not, the time series object will be decomposed at monthly level, therefore its frequency will be (24* 7)*52, which equals to 8736.
+
+```{r,echo=FALSE}
+monthly_ts <- ts(df$Consumption,frequency = 24*7*52)
+monthly_dec <- decompose(monthly_ts,type="additive")
+df[,monthly:=as.numeric(monthly_dec$seasonal)]
+
+```
+
+The monthly decomposition plots are below.
+
+```{r}
+plot(monthly_dec)
+```
+
+The monthly seasonality effect is below 
+
+```{r,echo=FALSE}
+ggplot(df[1:(8736*2)], aes(x=DateTime, y=monthly)) +
+  geom_line() +
+  geom_point() +
+  labs(title="Monthly Seasonality" , x="Date", y="Monthly Effect" )
+
+```
+
+By observing the seasonality plot,  one can state that there is high consumption during winters and summers. The reason may be high and low temperatures hence the need of air conditioning. Also, summer time consumption is slightly higher than winter time consumption.
+
+The random component of the monthly decomposed data is below.
+
+```{r}
+plot(monthly_dec$random)
+```
+
+
+### Comparison of Decomposition Levels in terms of Trend
+
+As the frequency of the time series increases, trend component becomes smoother. There is less ups and downs as we search for a seasoanlity in a higher frequency.
+
+## Decomposition with Frequency 7*24
+
+We will continue our analysis with the time series object which has 7*24 as frequency. This means that both the hour and the day of the observation define the seasonality. 
+
+We have already decomposed the time series object with frequency 7*24 
+
+
+The daily decomposition plots are below. 
+
+```{r}
+plot(daily_dec)
+```
+
+The hourly seasoanlity effect is below.
+
+```{r,echo=F}
+df <- df[,Random:=as.numeric(daily_dec$random)]
+df <- df[,Seasonality:=as.numeric(daily_dec$seasonal)]
+df <- df[,Trend:=as.numeric(daily_dec$trend)]
+ggplot(df[1:168*2], aes(x=DateTime, y=daily)) +
+  geom_line() +
+  geom_point() +
+  labs(title="Daily Seasonality" , x="Date", y="Daily Effect" )
+```
+
+As we have already discussed; 1) the consumption is lower in the weekends, especially on Sunday. 2) the consumption increases from 6 am until 12 am. Then it stays constant until midnight. Then it decreaes until 6 am. 
+
+```{r}
+plot(daily_dec$random)
+```
+
+The random component of the time series object seems to be random. 
+
+```{r,echo=FALSE}
+summary(ur.kpss(daily_dec$random))
+```
+
+H0 in KPSS test states that the data is stationary. The value of test statistic is significantly lower than all the critical values. The outcome declares that there is no evidence to reject the idea of the consumption data being stationary. Therefore we can state that the random component is stationary.
+We can now start building models.
+
+It is also essential to analyze the ACF and PACF plots when building a model. 
+
+```{r,echo=FALSE,fig.show="hold", out.width="50%"}
+
+ggAcf(daily_dec$random, lag.max = 168) + 
+  labs(title = "ACF of the random component")
+ggPacf(daily_dec$random, lag.max = 168) +
+  labs(title = "PACF of the random component")
+```
+
+ The ACF is sinusoidal, and in PACF there are two significant spikes at the first two lags. However, there is also a significant spike at lag 25 in the PACF.
+By observing the ACF and PACF plots, we can state that this time series can not be modeled only by AR or only by MA. We will need to build an ARMA model.
+
+
+## AR Models
+
+Now, several AR models will be built. 
+
+```{r}
+ar1 <-  arima(df[,Random], order = c(1,0,0))
+ar2 <-  arima(df[,Random], order = c(2,0,0))
+ar3 <-  arima(df[,Random], order = c(3,0,0))
+ar4 <-  arima(df[,Random], order = c(4,0,0))
+ar5 <-  arima(df[,Random], order = c(5,0,0))
+
+AIC_ar <- c(ar1=AIC(ar1), ar2=AIC(ar2) , ar3=AIC(ar3), ar4=AIC(ar4) , ar5= AIC(ar5))
+which.min(AIC_ar)
+```
+
+AR 5 model has the lowest AIC, hence its the best model among them.
+
+## MA Models
+
+Now, several MA models will be built.
+
+```{r}
+ma1 <-  arima(df[,Random], order = c(0,0,1))
+ma2 <-  arima(df[,Random], order = c(0,0,2))
+ma3 <-  arima(df[,Random], order = c(0,0,3))
+ma4 <-  arima(df[,Random], order = c(0,0,4))
+ma5 <-  arima(df[,Random], order = c(0,0,5))
+
+AIC_ma <- c(ma1=AIC(ma1),ma2=AIC(ma2), ma3=AIC(ma3) , ma4=AIC(ma4),ma5=AIC(ma5))
+which.min(AIC_ma)
+```
+
+MA 5 model has the lowest AIC, hence its the best model among them.
+
+Remark: As the models' order increase, AIC value continues to decrease. However,increasing the order is computationally costly. Therefore we selected the best AR and MA models among five models.
+
+ AR 5 model yields a lower AIC value than MA 5 model. However, the model can be improved.
+ 
+ 
+## ARMA Models
+
+Let's combine the selected AR 5 and MA 5 models and build an ARMA model.
+
+```{r}
+ 
+arma1 <-arima(df[,Random], order = c(5,0,5))
+AIC(arma1)
+```
+This model yields an AIC value of 715038.9, which is smaller than the AR 5 model.
+This model is complex and computationally costly. Let's decrease the complexity by decreasing the number of parameters.
+
+```{r}
+arma2 <- arima(df[,Random], order = c(4,0,4))
+AIC(arma2)
+```
+
+With this new model, both AIC value and the complexity of the model decrease. Therefore this model will be used for forecasting.
+The corresponding AIC value is 713871.9.
+
+We should observe how the model fits the data. 
+
+```{r,echo=FALSE}
+
+df[,Residuals:=residuals(arma2)]
+df[,fitted:=Random - Residuals]
+df[,fitted:=as.numeric(fitted) +as.numeric(Trend) + as.numeric(Seasonality)]
+
+```
+
+The below graph represents the actual and fitted data over time. 
+```{r,echo=FALSE,warning=FALSE,message=FALSE}
+
+ggplot(df, aes(x=DateTime)) +
+  geom_line(aes(y=Consumption, col="actual")) +
+  geom_line(aes(y=fitted, col="fitted")) +
+  labs(title = "Fitted and actual values of consumption over time" , x="Date" ) 
+```
+
+In order to better visualize it we can zoom in to a random interval.
+
+
+```{r,echo=FALSE}
+ggplot(df[DateTime>="2016-03-19 14:00:00 " & DateTime<="2016-03-29 14:00:00"], aes(x=DateTime)) +
+  geom_line(aes(y=Consumption, col="actual")) +
+  geom_line(aes(y=fitted, col="fitted")) +
+  labs(title = "Fitted and actual values of consumption over time" , x="Date" )
+```
+
+The model seems to fit the actual data.
+
+
+## Forecasts
+
+We are going to forecast the electricity consumption between 6th of May to 20th of May in 2021.
+
+The last trend value will be used in the forecasts. The effect of seasonality and the last trend value will be added to forecasts of the random component.
+
+The graph below shows the actual values and forecasts over time.
+
+```{r,echo=F}
+last_trend <- tail(daily_dec$trend[!is.na(daily_dec$trend)],1)
+seasonal_effect <- daily_dec$seasonal[(46849-84):47208]
+model_forecast <- predict(arma2, n.ahead = (15*24) + 84)$pred
+model_forecast <- model_forecast + last_trend + seasonal_effect
+
+forecasted <- tail(model_forecast, (15*24))
+actual <- tail(df$Consumption, (15*24))
+
+dfdf <- data.frame(forecasts=forecasted,actuals=actual)
+forecast_dates <-as.vector(df[46849:47208,1])
+dfdf <- cbind(dfdf,forecast_dates)
+
+ggplot(dfdf, aes(x=DateTime)) +
+  geom_line(aes(y=actuals , col="actual")) +
+  geom_line(aes(y=forecasts, col="forecasts")) +
+  labs(title="Actual values vs Forecasts" , x="Date" , y="Consumption")
+
+```
+
+## Forecast Evaluation
+
+The forecasts do not fit the actual data well. The model can not reflect some behaviours of the data. A SARIMA model could have fit better.
+
+We can use daily MAPE, daily bias and WMAPE to evaluate the model. 
+accu() function provides the overall metrics.
+
+```{r,echo=FALSE}
+accu=function(actual,forecast) {
+  n=length(actual)
+  error=actual-forecast
+  mean=mean(actual)
+  sd=sd(actual)
+  CV=sd/mean
+  bias=sum(error)/sum(actual)
+  MAPE=sum(abs(error/actual))/n
+  MAD=sum(abs(error))/n
+  WMAPE=MAD/mean
+  l=data.frame(n,mean,sd,CV,bias,MAPE,WMAPE)
+  return(l) }
+
+accu <- accu(actual,forecasted)
+
+```
+
+```{r}
+accu
+```
+
+Overall MAPE and WMAPE are reasonably small, which is a good sign.
+
+Let's analyze daily bias and daily MAPE.
+
+```{r,echo=FALSE}
+dfdf <- as.data.table(dfdf)
+dfdf <- dfdf[,error:=actuals-forecasts]
+dfdf <- dfdf[,APE:= abs(error/actuals)]
+dfdf <- dfdf[,bias:= (error/actuals)]
+
+metrics <- dfdf[ , .(DailyMAPE = sum(APE) /24 , DailyBias = sum(bias) /24) , by=.(Date=as.Date(DateTime))] 
+
+```
+
+```{r}
+metrics
+```
+
+At some days, such as May 5th, daily MAPE and daily bias is very high. However, overall bias and overall MAPE are reasonably small.
+
+
+# Conclusion
+
+To conclude, we have built an ARMA(4,0,4) model to forecast the electricity consumption between May 6th and May 20th 2021. We evaluated the forecasts and the model.
+
+
+
+
+
+
+
+
+
