@@ -189,8 +189,8 @@ accu=function(actual,forecast) {
   MAPE=sum(abs(error/actual))/n
   MAD=sum(abs(error))/n
   WMAPE=MAD/mean
-  l=data.frame(n,mean,sd,CV,bias,MAPE,WMAPE)
-  return(l) }
+  metrics=data.frame(n,mean,sd,CV,bias,MAPE,WMAPE)
+  return(metrics) }
 
 accu <- accu(actual,forecasted)
 accu
