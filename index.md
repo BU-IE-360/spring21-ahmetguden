@@ -13,3 +13,7 @@
 ## Homework 3
 
 [Here](files/hw3.html) is the ARMA model to forecast the electricity consumption.
+
+## final
+
+[Here](files/final360.html) is the final
