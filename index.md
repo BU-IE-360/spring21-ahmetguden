@@ -16,4 +16,9 @@
 
 ## final
 
-[Here](files/final360.html) is the final
+[Here](files/final360.html) is the final exam.
+
+
+## 
+
+[Here](files/project.html) is the final project.
