@@ -14,11 +14,11 @@
 
 [Here](files/hw3.html) is the ARMA model to forecast the electricity consumption.
 
-## final
+## Final Exam
 
 [Here](files/final360.html) is the final exam.
 
 
-## 
+## Final Project 
 
 [Here](files/project.html) is the final project.
