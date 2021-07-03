@@ -22,3 +22,8 @@
 ## Final Project 
 
 [Here](files/project.html) is the final project.
+
+
+## Alternative Methods for the Final Project
+
+[Here](files/hw4_5.html) are the alternative methods for the final project.
